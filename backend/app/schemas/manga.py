@@ -122,6 +122,9 @@ class CommentCreate(BaseModel):
 class BookmarkOut(BaseModel):
     id: int
     manga_id: int
+    manga_title: Optional[str] = None
+    manga_slug: Optional[str] = None
+    manga_cover_image: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
