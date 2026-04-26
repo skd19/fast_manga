@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -15,11 +16,13 @@ export default function ReaderTopBar({
   chapterSlug,
   imageWidth,
   isFullscreen,
+  mangaSpreadCount,
   mangaSlug,
   nav,
   navigate,
   onChapterChange,
   onImageWidthChange,
+  onMangaSpreadCountChange,
   onReaderModeChange,
   onToggleFullscreen,
   onToggleReaderSettings,
@@ -29,6 +32,28 @@ export default function ReaderTopBar({
   showReaderSettings,
   widthOptions,
 }) {
+  const settingsContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (!showReaderSettings) return;
+
+    const handlePointerDown = (event) => {
+      if (
+        settingsContainerRef.current &&
+        !settingsContainerRef.current.contains(event.target)
+      ) {
+        onToggleReaderSettings();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [onToggleReaderSettings, showReaderSettings]);
+
   return (
     <div
       className={clsx(
@@ -47,7 +72,10 @@ export default function ReaderTopBar({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 relative">
+        <div
+          ref={settingsContainerRef}
+          className="flex items-center gap-2 shrink-0 relative"
+        >
           <select
             value={chapterSlug}
             onChange={(e) => {
@@ -124,6 +152,31 @@ export default function ReaderTopBar({
                   ))}
                 </div>
               </div>
+
+              {readerMode === "side-by-side" && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                    Pages Per View
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[1, 2].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => onMangaSpreadCountChange(count)}
+                        className={clsx(
+                          "rounded px-3 py-2 text-xs transition-colors",
+                          mangaSpreadCount === count
+                            ? "bg-manga-600 text-white"
+                            : "bg-gray-800 text-gray-400 hover:bg-gray-700",
+                        )}
+                      >
+                        {count} Page{count > 1 ? "s" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

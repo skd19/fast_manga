@@ -19,10 +19,22 @@ async def my_bookmarks(
 ):
     result = await db.execute(
         select(Bookmark)
+        .options(joinedload(Bookmark.manga))
         .where(Bookmark.user_id == current_user.id)
         .order_by(Bookmark.created_at.desc())
     )
-    return result.scalars().all()
+    bookmarks = result.scalars().all()
+    return [
+        BookmarkOut(
+            id=bm.id,
+            manga_id=bm.manga_id,
+            manga_title=bm.manga.title if bm.manga else None,
+            manga_slug=bm.manga.slug if bm.manga else None,
+            manga_cover_image=bm.manga.cover_image if bm.manga else None,
+            created_at=bm.created_at,
+        )
+        for bm in bookmarks
+    ]
 
 
 @router.post("/{manga_slug}", response_model=BookmarkOut, status_code=201)
