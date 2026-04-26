@@ -55,8 +55,11 @@ export default function ChapterReadPage() {
   const [readerMode, setReaderMode] = useState(
     () => localStorage.getItem("readerMode") || "webtoon",
   );
+  const [mangaSpreadCount, setMangaSpreadCount] = useState(() => {
+    const saved = Number(localStorage.getItem("mangaSpreadCount"));
+    return saved === 1 || saved === 2 ? saved : 1;
+  });
   const [spreadIndex, setSpreadIndex] = useState(0);
-  const [isSinglePageManga, setIsSinglePageManga] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showReaderSettings, setShowReaderSettings] = useState(false);
@@ -73,6 +76,10 @@ export default function ChapterReadPage() {
     localStorage.setItem("readerMode", readerMode);
   }, [readerMode]);
 
+  useEffect(() => {
+    localStorage.setItem("mangaSpreadCount", String(mangaSpreadCount));
+  }, [mangaSpreadCount]);
+
   const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   const widthOptions = [
@@ -86,7 +93,7 @@ export default function ChapterReadPage() {
     { value: "side-by-side", label: "Manga" },
   ];
   const pages = Array.isArray(chapter?.images_data) ? chapter.images_data : [];
-  const mangaPageStep = isSinglePageManga ? 1 : 2;
+  const mangaPageStep = mangaSpreadCount;
   const canGoPreviousSpread = readerMode === "side-by-side" && spreadIndex > 0;
   const canGoNextSpread =
     readerMode === "side-by-side" && spreadIndex + mangaPageStep < pages.length;
@@ -107,15 +114,6 @@ export default function ChapterReadPage() {
     scrollTop();
     setShowReaderSettings(false);
   }, [chapterSlug]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
-    const updateSinglePageMode = () => setIsSinglePageManga(mediaQuery.matches);
-
-    updateSinglePageMode();
-    mediaQuery.addEventListener("change", updateSinglePageMode);
-    return () => mediaQuery.removeEventListener("change", updateSinglePageMode);
-  }, []);
 
   useEffect(() => {
     setSpreadIndex((current) =>
@@ -214,11 +212,13 @@ export default function ChapterReadPage() {
         navigate={navigate}
         onChapterChange={scrollTop}
         onImageWidthChange={setImageWidth}
+        onMangaSpreadCountChange={setMangaSpreadCount}
         onReaderModeChange={setReaderMode}
         onToggleFullscreen={toggleFullscreen}
         onToggleReaderSettings={() =>
           setShowReaderSettings((value) => !value)
         }
+        mangaSpreadCount={mangaSpreadCount}
         readerMode={readerMode}
         readerModes={readerModes}
         showControls={showControls}
@@ -268,7 +268,12 @@ export default function ChapterReadPage() {
                   aria-label="Next pages"
                 />
 
-                <div className="relative z-0 grid w-full grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 items-center">
+                <div
+                  className={clsx(
+                    "relative z-0 grid w-full gap-2 md:gap-3 items-center",
+                    mangaSpreadCount === 2 ? "grid-cols-2" : "grid-cols-1",
+                  )}
+                >
                   {visibleSpread.map((src, idx) => (
                     <LazyImage
                       key={spreadIndex + idx}
