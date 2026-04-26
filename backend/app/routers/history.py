@@ -17,8 +17,10 @@ async def reading_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # prefetch manga
     result = await db.execute(
         select(ReadingHistory)
+        .options(joinedload(ReadingHistory.manga))
         .where(ReadingHistory.user_id == current_user.id)
         .order_by(ReadingHistory.last_read_at.desc())
         .limit(50)

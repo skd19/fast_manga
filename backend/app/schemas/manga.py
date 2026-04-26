@@ -150,10 +150,18 @@ class NotificationOut(BaseModel):
 class ReadingHistoryOut(BaseModel):
     id: int
     manga_id: int
+    manga_title: Optional[str] = None
     last_read_chapter_id: Optional[int]
     last_read_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        instance = super().model_validate(obj, **kwargs)
+        if instance.manga_title is None and hasattr(obj, "manga") and obj.manga:
+            instance.manga_title = obj.manga.title
+        return instance
 
 
 class ScraperErrorOut(BaseModel):

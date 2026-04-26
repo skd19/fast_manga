@@ -79,7 +79,7 @@ function AddMangaForm({ onSuccess }) {
             placeholder="AniList ID (optional)"
             min="1"
           />
-          <span className="text-xs text-gray-500 whitespace-nowrap">
+          <span className="text-xs text-gray-500 md:whitespace-nowrap">
             Creates manga from AniList metadata if not in DB
           </span>
         </div>
@@ -305,21 +305,19 @@ export default function ScraperDashboard() {
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setTab("manga")}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            tab === "manga"
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "manga"
               ? "bg-manga-600 text-white"
               : "text-gray-400 hover:bg-gray-800"
-          }`}
+            }`}
         >
           Manga List
         </button>
         <button
           onClick={() => setTab("errors")}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            tab === "errors"
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tab === "errors"
               ? "bg-red-700 text-white"
               : "text-gray-400 hover:bg-gray-800"
-          }`}
+            }`}
         >
           <span className="flex items-center gap-1">
             <AlertTriangle size={14} /> Errors
