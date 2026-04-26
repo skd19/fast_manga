@@ -45,9 +45,15 @@ SERVING_FRONTEND = os.path.isfile(FRONTEND_INDEX)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ───────────────────────────────────────────────────────────────
-    logger.info("Starting up — creating database tables...")
-    await create_tables()
-    logger.info("Database ready.")
+    logger.info("Starting up...")
+    if settings.auto_create_tables:
+        logger.info("AUTO_CREATE_TABLES enabled — creating database tables...")
+        await create_tables()
+        logger.info("Database ready.")
+    else:
+        logger.info(
+            "AUTO_CREATE_TABLES disabled — expecting schema to be managed by Alembic."
+        )
 
     # Log registered scrapers so it's visible in the startup log
     try:

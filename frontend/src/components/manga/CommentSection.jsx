@@ -184,10 +184,18 @@ function CommentCard({ comment, isFirst }) {
       }`}
     >
       {/* Avatar */}
-      <div className="shrink-0 w-8 h-8 rounded-full bg-manga-900 border border-manga-800 flex items-center justify-center text-xs font-bold text-manga-300">
-        {comment.username && comment.username !== "Anonymous"
-          ? comment.username[0].toUpperCase()
-          : "?"}
+      <div className="shrink-0 w-8 h-8 rounded-full bg-manga-900 border border-manga-800 flex items-center justify-center text-xs font-bold text-manga-300 overflow-hidden">
+        {comment.user_avatar ? (
+          <img
+            src={comment.user_avatar}
+            alt={comment.username || "Anonymous"}
+            className="w-full h-full object-cover"
+          />
+        ) : comment.username && comment.username !== "Anonymous" ? (
+          comment.username[0].toUpperCase()
+        ) : (
+          "?"
+        )}
       </div>
 
       {/* Body */}

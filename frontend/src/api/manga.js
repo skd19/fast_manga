@@ -63,6 +63,16 @@ export const mangaApi = {
   scraperErrors: (params) => client.get('/staff/scrapers/errors', { params }),
   scraperMangaRows: (mangaId) => client.get(`/staff/scrapers/${mangaId}/rows`),
 
-  // Admin: create manga
+  // Admin: manga management
   createManga: (data) => client.post('/manga/', data),
+  staffMangaDetail: (mangaId) => client.get(`/manga/staff/${mangaId}`),
+  updateManga: (mangaId, data) => client.put(`/manga/${mangaId}`, data),
+  deleteManga: (mangaId) => client.delete(`/manga/${mangaId}`),
+  uploadMangaCover: (mangaId, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return client.post(`/manga/${mangaId}/cover`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }

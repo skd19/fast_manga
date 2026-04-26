@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 
 from app.config import get_settings
 
@@ -41,3 +42,30 @@ async def create_tables():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _backfill_staff_users(conn)
+
+
+async def _backfill_staff_users(conn):
+    """Copy legacy users.is_staff/is_superuser flags into staff_users if present."""
+    users_info = await conn.execute(text("PRAGMA table_info(users)"))
+    user_columns = {row[1] for row in users_info.fetchall()}
+    if not {"is_staff", "is_superuser"}.intersection(user_columns):
+        return
+
+    staff_info = await conn.execute(text("PRAGMA table_info(staff_users)"))
+    staff_columns = {row[1] for row in staff_info.fetchall()}
+    if not {"user_id", "is_superuser"}.issubset(staff_columns):
+        return
+
+    await conn.execute(
+        text(
+            """
+            INSERT INTO staff_users (user_id, is_superuser)
+            SELECT users.id, COALESCE(users.is_superuser, 0)
+            FROM users
+            LEFT JOIN staff_users ON staff_users.user_id = users.id
+            WHERE staff_users.user_id IS NULL
+              AND (COALESCE(users.is_staff, 0) = 1 OR COALESCE(users.is_superuser, 0) = 1)
+            """
+        )
+    )

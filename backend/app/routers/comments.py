@@ -56,6 +56,7 @@ async def list_comments(
             text=c.text,
             created_at=c.created_at,
             username=c.user.username if c.user else "Anonymous",
+            user_avatar=c.user.avatar if c.user else None,
         )
         for c in comments
     ]
@@ -115,4 +116,5 @@ async def add_comment(
         text=comment.text,
         created_at=comment.created_at,
         username=current_user.username if current_user else "Anonymous",
+        user_avatar=current_user.avatar if current_user else None,
     )

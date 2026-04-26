@@ -14,6 +14,8 @@ import ProfilePage from './pages/ProfilePage'
 import PublicProfilePage from './pages/PublicProfilePage'
 import BookmarksPage from './pages/BookmarksPage'
 import ScraperDashboard from './pages/admin/ScraperDashboard'
+import MangaManagePage from './pages/admin/MangaManagePage'
+import MangaEditPage from './pages/admin/MangaEditPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute({ children }) {
@@ -52,6 +54,8 @@ export default function App() {
 
         {/* Staff / admin */}
         <Route path="/staff/scrapers" element={<StaffRoute><ScraperDashboard /></StaffRoute>} />
+        <Route path="/staff/manga" element={<StaffRoute><MangaManagePage /></StaffRoute>} />
+        <Route path="/staff/manga/:mangaId/edit" element={<StaffRoute><MangaEditPage /></StaffRoute>} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>

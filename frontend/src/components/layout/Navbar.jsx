@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../context/AuthContext";
 import { useNotifications } from "../../hooks/useManga";
+import { mangaApi } from "../../api/manga";
 import {
   BookOpen,
   Search,
@@ -22,21 +24,116 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const { data: notifs = [] } = useNotifications(!!user);
   const unread = notifs.filter((n) => !n.is_read).length;
+  const trimmedSearch = searchQuery.trim();
+  const canLiveSearch = trimmedSearch.length > 3;
+  const showLiveSearch = searchOpen && canLiveSearch;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(trimmedSearch);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [trimmedSearch]);
+
+  const { data: liveSearchData, isFetching: liveSearchFetching } = useQuery({
+    queryKey: ["navbar-search", debouncedSearch],
+    queryFn: () =>
+      mangaApi
+        .search({ q: debouncedSearch, page: 1, page_size: 6 })
+        .then((r) => r.data),
+    enabled: debouncedSearch.length > 3,
+  });
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery("");
+      setSearchOpen(false);
+      setMenuOpen(false);
     }
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setSearchOpen(true);
+  };
+
+  const handleResultClick = () => {
+    setSearchQuery("");
+    setSearchOpen(false);
+    setMenuOpen(false);
   };
 
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  const renderLiveSearch = () => {
+    if (!showLiveSearch) return null;
+
+    const items = liveSearchData?.items || [];
+
+    return (
+      <div
+        className="absolute left-0 right-0 top-full mt-2 card overflow-hidden shadow-xl z-50"
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        {liveSearchFetching && debouncedSearch !== trimmedSearch ? (
+          <p className="px-4 py-3 text-sm text-gray-500">Searching...</p>
+        ) : items.length > 0 ? (
+          <>
+            <div className="max-h-80 overflow-y-auto divide-y divide-gray-800">
+              {items.map((manga) => (
+                <Link
+                  key={manga.id}
+                  to={`/manga/${manga.slug}`}
+                  onClick={handleResultClick}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-gray-800/70 transition-colors"
+                >
+                  <div className="w-10 h-14 rounded overflow-hidden bg-gray-800 shrink-0 flex items-center justify-center text-gray-600">
+                    {manga.cover_image ? (
+                      <img
+                        src={manga.cover_image}
+                        alt={manga.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <BookOpen size={18} />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-100 truncate">
+                      {manga.title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {manga.latest_chapter
+                        ? `Latest: Ch. ${Number(manga.latest_chapter.number)}`
+                        : manga.status}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <button
+              type="submit"
+              className="w-full px-4 py-2 text-sm text-manga-400 hover:bg-gray-800/70 transition-colors"
+            >
+              View all results
+            </button>
+          </>
+        ) : (
+          <p className="px-4 py-3 text-sm text-gray-500">No results found</p>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -66,9 +163,11 @@ export default function Navbar() {
                 type="search"
                 placeholder="Search manga..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
+                onFocus={() => setSearchOpen(true)}
                 className="input pl-9 text-sm"
               />
+              {renderLiveSearch()}
             </div>
           </form>
 
@@ -138,13 +237,22 @@ export default function Navbar() {
                         <Bookmark size={14} /> Bookmarks
                       </Link>
                       {(user.is_staff || user.is_superuser) && (
-                        <Link
-                          to="/staff/scrapers"
-                          className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-800 text-manga-400"
-                          onClick={() => setUserMenuOpen(false)}
-                        >
-                          <Shield size={14} /> Scraper Admin
-                        </Link>
+                        <>
+                          <Link
+                            to="/staff/manga"
+                            className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-800 text-manga-400"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Shield size={14} /> Manga Admin
+                          </Link>
+                          <Link
+                            to="/staff/scrapers"
+                            className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-800 text-manga-400"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Shield size={14} /> Scraper Admin
+                          </Link>
+                        </>
                       )}
                       <hr className="border-gray-700 my-1" />
                       <button
@@ -191,9 +299,11 @@ export default function Navbar() {
                   type="search"
                   placeholder="Search manga..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchChange}
+                  onFocus={() => setSearchOpen(true)}
                   className="input pl-9 text-sm"
                 />
+                {renderLiveSearch()}
               </div>
             </form>
             <Link
@@ -220,13 +330,22 @@ export default function Navbar() {
                   Bookmarks
                 </Link>
                 {(user.is_staff || user.is_superuser) && (
-                  <Link
-                    to="/staff/scrapers"
-                    className="block py-2 text-manga-400"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Scraper Admin
-                  </Link>
+                  <>
+                    <Link
+                      to="/staff/manga"
+                      className="block py-2 text-manga-400"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Manga Admin
+                    </Link>
+                    <Link
+                      to="/staff/scrapers"
+                      className="block py-2 text-manga-400"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Scraper Admin
+                    </Link>
+                  </>
                 )}
                 <button
                   onClick={handleLogout}

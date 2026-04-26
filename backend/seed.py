@@ -26,7 +26,7 @@ from app.models.manga import (
     Manga,
     MangaCategory,
 )
-from app.models.user import User
+from app.models.user import StaffUser, User
 from app.utils.helpers import make_slug, slugify_chapter_number
 from app.utils.security import hash_password
 from httpx import ASGITransport, AsyncClient
@@ -101,15 +101,21 @@ async def seed_db():
                 username=admin_username,
                 email="admin@example.com",
                 hashed_password=hash_password("admin1234"),
-                is_staff=True,
-                is_superuser=True,
             )
             db.add(admin)
             await db.flush()
+            db.add(StaffUser(user_id=admin.id, is_superuser=True))
             print(
                 f"    {PASS} Staff user created  (username=admin  password=admin1234)"
             )
         else:
+            staff_profile = (
+                await db.execute(
+                    select(StaffUser).where(StaffUser.user_id == existing_admin.id)
+                )
+            ).scalar_one_or_none()
+            if not staff_profile:
+                db.add(StaffUser(user_id=existing_admin.id, is_superuser=True))
             print(f"    {INFO} Staff user already exists")
 
         # ── 3. Manga 1 — "Blade of the Eternal Storm" ───────────────────────

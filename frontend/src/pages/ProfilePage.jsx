@@ -105,12 +105,20 @@ export default function ProfilePage() {
           <p className="text-gray-500 text-sm">{user.email}</p>
           {user.bio && <p className="text-gray-400 text-sm mt-1">{user.bio}</p>}
           {user.is_staff && (
-            <Link
-              to="/staff/scrapers"
-              className="text-xs text-manga-400 hover:underline mt-1 block"
-            >
-              Staff Dashboard →
-            </Link>
+            <div className="flex gap-3 mt-1">
+              <Link
+                to="/staff/manga"
+                className="text-xs text-manga-400 hover:underline"
+              >
+                Manga Admin →
+              </Link>
+              <Link
+                to="/staff/scrapers"
+                className="text-xs text-manga-400 hover:underline"
+              >
+                Scraper Admin →
+              </Link>
+            </div>
           )}
         </div>
       </div>

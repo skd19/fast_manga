@@ -25,7 +25,18 @@ async def reading_history(
         .order_by(ReadingHistory.last_read_at.desc())
         .limit(50)
     )
-    return result.scalars().all()
+    history = result.scalars().all()
+    return [
+        {
+            "id": item.id,
+            "manga_id": item.manga_id,
+            "manga_title": item.manga.title if item.manga else None,
+            "manga_slug": item.manga.slug if item.manga else None,
+            "last_read_chapter_id": item.last_read_chapter_id,
+            "last_read_at": item.last_read_at,
+        }
+        for item in history
+    ]
 
 
 @router.get("/read-chapters")

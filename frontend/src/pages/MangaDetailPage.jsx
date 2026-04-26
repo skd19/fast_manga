@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import CommentSection from "../components/manga/CommentSection";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -37,10 +37,15 @@ export default function MangaDetailPage() {
   const { slug } = useParams();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [chapterPage] = useState(1);
+  const [chapterPage, setChapterPage] = useState(1);
+  const [loadedChapters, setLoadedChapters] = useState([]);
 
   const { data: manga, isLoading, isError } = useMangaDetail(slug);
-  const { data: chaptersData } = useChapters(slug, {
+  const {
+    data: chaptersData,
+    isLoading: chaptersLoading,
+    isFetching: chaptersFetching,
+  } = useChapters(slug, {
     page: chapterPage,
     page_size: 100,
   });
@@ -49,6 +54,27 @@ export default function MangaDetailPage() {
   const { add: addBm, remove: removeBm } = useToggleBookmark(slug);
 
   const isBookmarked = bookmarks.some((b) => b.manga_id === manga?.id);
+  const hasMoreChapters =
+    chaptersData?.total != null && loadedChapters.length < chaptersData.total;
+
+  useEffect(() => {
+    setChapterPage(1);
+    setLoadedChapters([]);
+  }, [slug]);
+
+  useEffect(() => {
+    if (!chaptersData?.items) return;
+
+    setLoadedChapters((current) => {
+      if (chaptersData.page === 1) return chaptersData.items;
+
+      const existingIds = new Set(current.map((chapter) => chapter.id));
+      const nextItems = chaptersData.items.filter(
+        (chapter) => !existingIds.has(chapter.id)
+      );
+      return [...current, ...nextItems];
+    });
+  }, [chaptersData]);
 
   const rateMutation = useMutation({
     mutationFn: (score) => mangaApi.rate(slug, score),
@@ -214,10 +240,26 @@ export default function MangaDetailPage() {
       </div>
 
       {/* Chapter List */}
-      {chaptersData && (
+      {(chaptersData || loadedChapters.length > 0) && (
         <div className="mb-8">
-          <ChapterList chapters={chaptersData.items} mangaSlug={manga.slug} />
+          <ChapterList chapters={loadedChapters} mangaSlug={manga.slug} />
+          {hasMoreChapters && (
+            <div className="flex justify-center mt-4">
+              <button
+                type="button"
+                onClick={() => setChapterPage((page) => page + 1)}
+                disabled={chaptersFetching}
+                className="btn-secondary"
+              >
+                {chaptersFetching ? "Loading..." : "Load more"}
+              </button>
+            </div>
+          )}
         </div>
+      )}
+
+      {chaptersLoading && loadedChapters.length === 0 && (
+        <LoadingSpinner size="sm" className="py-8" />
       )}
 
       {/* Comments — shown for the latest chapter */}

@@ -92,6 +92,17 @@ class MangaCreate(BaseModel):
     category_ids: List[int] = []
 
 
+class MangaUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    author: Optional[str] = None
+    artist: Optional[str] = None
+    status: Optional[str] = None
+    anilist_id: Optional[int] = None
+    sources: Optional[List[Any]] = None
+    category_ids: Optional[List[int]] = None
+
+
 class CommentOut(BaseModel):
     id: int
     user_id: Optional[int]
@@ -99,6 +110,7 @@ class CommentOut(BaseModel):
     text: str
     created_at: datetime
     username: Optional[str] = None
+    user_avatar: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -151,6 +163,7 @@ class ReadingHistoryOut(BaseModel):
     id: int
     manga_id: int
     manga_title: Optional[str] = None
+    manga_slug: Optional[str] = None
     last_read_chapter_id: Optional[int]
     last_read_at: datetime
 
@@ -161,6 +174,8 @@ class ReadingHistoryOut(BaseModel):
         instance = super().model_validate(obj, **kwargs)
         if instance.manga_title is None and hasattr(obj, "manga") and obj.manga:
             instance.manga_title = obj.manga.title
+        if instance.manga_slug is None and hasattr(obj, "manga") and obj.manga:
+            instance.manga_slug = obj.manga.slug
         return instance
 
 

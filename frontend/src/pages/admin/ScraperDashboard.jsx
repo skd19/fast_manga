@@ -29,10 +29,15 @@ function AddMangaForm({ onSuccess }) {
     anilist_id: "",
   });
   const mutation = useMutation({
-    mutationFn: () => mangaApi.scraperAddManga(form),
-    onSuccess: () => {
+    mutationFn: (payload) => mangaApi.scraperAddManga(payload),
+    onSuccess: (response) => {
       toast.success("Scrape task queued!");
-      onSuccess?.();
+      setForm((current) => ({
+        ...current,
+        manga_url: "",
+        anilist_id: "",
+      }));
+      onSuccess?.(response.data?.manga);
     },
     onError: (e) => toast.error(e.response?.data?.detail || "Failed"),
   });
@@ -76,11 +81,12 @@ function AddMangaForm({ onSuccess }) {
             value={form.anilist_id}
             onChange={(e) => setForm({ ...form, anilist_id: e.target.value })}
             className="input w-48 text-sm"
-            placeholder="AniList ID (optional)"
+            placeholder="AniList ID"
             min="1"
+            required
           />
           <span className="text-xs text-gray-500 md:whitespace-nowrap">
-            Creates manga from AniList metadata if not in DB
+            Creates manga from AniList metadata if it is not in DB
           </span>
         </div>
         <button
@@ -296,9 +302,32 @@ export default function ScraperDashboard() {
 
       {/* Add manga form */}
       <AddMangaForm
-        onSuccess={() =>
-          qc.invalidateQueries({ queryKey: ["scraper-dashboard"] })
-        }
+        onSuccess={(manga) => {
+          setTab("manga");
+          setPage(1);
+          if (manga) {
+            qc.setQueryData(["scraper-dashboard", 1], (old) => {
+              if (!old) return old;
+              const exists = old.items?.some((item) => item.id === manga.id);
+              const items = exists
+                ? old.items.map((item) => (item.id === manga.id ? manga : item))
+                : [manga, ...(old.items || [])].slice(0, old.page_size || 20);
+
+              return {
+                ...old,
+                items,
+                total: exists ? old.total : old.total + 1,
+                total_pages: Math.max(
+                  1,
+                  Math.ceil(
+                    (exists ? old.total : old.total + 1) / (old.page_size || 20)
+                  )
+                ),
+              };
+            });
+          }
+          qc.invalidateQueries({ queryKey: ["scraper-dashboard"] });
+        }}
       />
 
       {/* Tabs */}

@@ -15,8 +15,25 @@ from app.models.user import User
 from app.schemas.manga import AddMangaScraperRequest, ScraperErrorOut
 from app.services.auth import get_staff_user
 from app.services.scraper import retry_chapter_error, run_scraper
+from scrapers.utils.storage import get_or_create_manga
 
 router = APIRouter(prefix="/staff/scrapers", tags=["scraper"])
+
+
+def _scraper_manga_row(manga: Manga) -> dict:
+    return {
+        "id": manga.id,
+        "title": manga.title,
+        "slug": manga.slug,
+        "status": manga.status,
+        "updated_at": manga.updated_at,
+        "latest_chapter": {
+            "number": manga.latest_chapter.number,
+            "slug": manga.latest_chapter.slug,
+        }
+        if manga.latest_chapter
+        else None,
+    }
 
 
 @router.get("/")
@@ -39,22 +56,7 @@ async def scraper_dashboard(
     mangas = result.scalars().unique().all()
 
     return {
-        "items": [
-            {
-                "id": m.id,
-                "title": m.title,
-                "slug": m.slug,
-                "status": m.status,
-                "updated_at": m.updated_at,
-                "latest_chapter": {
-                    "number": m.latest_chapter.number,
-                    "slug": m.latest_chapter.slug,
-                }
-                if m.latest_chapter
-                else None,
-            }
-            for m in mangas
-        ],
+        "items": [_scraper_manga_row(m) for m in mangas],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -69,14 +71,41 @@ async def add_manga(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_staff_user),
 ):
+    if not payload.anilist_id:
+        raise HTTPException(
+            status_code=400,
+            detail="AniList ID is required when adding a new manga from the scraper dashboard",
+        )
+
+    try:
+        manga_id = await get_or_create_manga(
+            anilist_id=payload.anilist_id,
+            manga_url=payload.manga_url,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     background_tasks.add_task(
         run_scraper,
         payload.manga_url,
         payload.scraper_name,
-        None,
+        manga_id,
         payload.anilist_id,
     )
-    return {"detail": f"Scrape task queued for {payload.manga_url}"}
+
+    result = await db.execute(
+        select(Manga)
+        .options(joinedload(Manga.latest_chapter))
+        .where(Manga.id == manga_id)
+    )
+    manga = result.scalar_one_or_none()
+    if not manga:
+        raise HTTPException(status_code=404, detail="Manga was not found after creation")
+
+    return {
+        "detail": f"Scrape task queued for {payload.manga_url}",
+        "manga": _scraper_manga_row(manga),
+    }
 
 
 @router.post("/start/{manga_id}")

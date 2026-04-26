@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from slugify import slugify
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.user import User
@@ -37,7 +38,11 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.username == payload.username))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.staff_profile))
+        .where(User.username == payload.username)
+    )
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
