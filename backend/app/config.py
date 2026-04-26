@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./manga.db"
     media_dir: str = "media"
     allowed_origins: str = "http://localhost:5173,http://localhost:3000"
+    auto_create_tables: bool = False
 
     @property
     def origins_list(self) -> list[str]:

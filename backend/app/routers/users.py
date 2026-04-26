@@ -5,6 +5,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import get_db
@@ -38,8 +39,12 @@ async def update_profile(
         current_user.bio = payload.bio
     db.add(current_user)
     await db.commit()
-    await db.refresh(current_user)
-    return current_user
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.staff_profile))
+        .where(User.id == current_user.id)
+    )
+    return result.scalar_one()
 
 
 @router.post("/profile/avatar", response_model=UserOut)
@@ -67,8 +72,12 @@ async def upload_avatar(
     current_user.avatar = f"/media/avatars/{filename}"
     db.add(current_user)
     await db.commit()
-    await db.refresh(current_user)
-    return current_user
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.staff_profile))
+        .where(User.id == current_user.id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/{username}", response_model=PublicProfile)

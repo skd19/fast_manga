@@ -94,7 +94,7 @@ fast_manga/
 | Migrations | Alembic |
 | Auth | JWT (python-jose) + bcrypt (passlib) |
 | Validation | Pydantic v2 |
-| Frontend | React 18 + Vite 6 |
+| Frontend | React 19 + Vite 8 |
 | Routing | React Router v6 |
 | State / Data | TanStack React Query v5 |
 | HTTP client | Axios |
@@ -133,9 +133,8 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Copy environment config and edit as needed
+# Enter backend project
 cd backend
-cp .env .env.local   # optional — .env is already set up for dev
 ```
 
 **Edit `backend/.env`:**
@@ -147,9 +146,48 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 DATABASE_URL=sqlite+aiosqlite:///./manga.db
 MEDIA_DIR=media
 ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+AUTO_CREATE_TABLES=false
 ```
 
 > ⚠️ **Change `SECRET_KEY` before deploying to production!**
+
+### 3. Database Migrations (Alembic)
+
+Apply the schema before starting the backend:
+
+```bash
+# From the backend/ directory
+alembic upgrade head
+```
+
+Create a new migration after changing SQLAlchemy models:
+
+```bash
+alembic revision --autogenerate -m "describe your change"
+alembic upgrade head
+```
+
+Check current migration status:
+
+```bash
+alembic current
+alembic history
+```
+
+If you already have an existing local database that was created before Alembic was set up, either:
+
+```bash
+# Option 1: rebuild local dev DB
+del manga.db
+alembic upgrade head
+```
+
+or mark it as already matching the initial migration:
+
+```bash
+# Option 2: keep the existing DB and mark it as migrated
+alembic stamp head
+```
 
 **Run the backend:**
 
@@ -163,19 +201,7 @@ The API will be available at:
 - **Interactive docs (Swagger)**: http://localhost:8000/api/docs
 - **ReDoc**: http://localhost:8000/api/redoc
 
-> Tables are created automatically on first startup — no need to run migrations manually for a fresh install.
-
----
-
-### 3. Database Migrations (Alembic)
-
-For schema changes after initial setup:
-
-```bash
-# From backend/ directory
-alembic revision --autogenerate -m "describe your change"
-alembic upgrade head
-```
+> The backend now expects schema management through Alembic. `AUTO_CREATE_TABLES=true` is available only as a fallback for local/test workflows.
 
 ---
 
@@ -223,7 +249,7 @@ python -c "
 import asyncio
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
-from app.models.user import User
+from app.models.user import StaffUser, User
 
 async def promote(username):
     async with AsyncSessionLocal() as db:
@@ -232,8 +258,10 @@ async def promote(username):
         if not user:
             print('User not found')
             return
-        user.is_staff = True
-        user.is_superuser = True
+        if not user.staff_profile:
+            db.add(StaffUser(user_id=user.id, is_superuser=True))
+        else:
+            user.staff_profile.is_superuser = True
         await db.commit()
         print(f'{username} is now a superuser')
 
@@ -326,7 +354,8 @@ Full interactive docs at `/api/docs` when the server is running.
 
 | Model | Description |
 |---|---|
-| `User` | Accounts with auth, avatar, bio, staff flags |
+| `User` | Accounts with auth, avatar, bio |
+| `StaffUser` | Staff/superuser role mapping for privileged users |
 | `Manga` | Title, slug, cover, status, rating cache, sources |
 | `Category` | Genre tags (many-to-many with Manga) |
 | `Chapter` | Number, slug, images_data (JSON list of URLs) |
@@ -350,6 +379,7 @@ Full interactive docs at `/api/docs` when the server is running.
 | `DATABASE_URL` | `sqlite+aiosqlite:///./manga.db` | Database connection string |
 | `MEDIA_DIR` | `media` | Directory for uploaded files |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Comma-separated CORS origins |
+| `AUTO_CREATE_TABLES` | `false` | Fallback to create tables on app startup instead of using Alembic |
 
 ---
 
@@ -365,7 +395,8 @@ Full interactive docs at `/api/docs` when the server is running.
 
 ## 📝 Development Notes
 
-- **Auto table creation** — SQLAlchemy creates all tables on startup; no manual migration needed for a fresh install
+- **Migrations first** — use Alembic for schema changes and fresh setup (`alembic upgrade head`)
+- **Auto table creation fallback** — set `AUTO_CREATE_TABLES=true` only for local/test shortcuts
 - **Hot reload** — both `uvicorn --reload` and `vite dev` support hot reload
 - **Proxy** — Vite proxies `/api` and `/media` to `localhost:8000` in dev
 - **Scraper registry** — add new scrapers by decorating functions with `@register_scraper("name")`

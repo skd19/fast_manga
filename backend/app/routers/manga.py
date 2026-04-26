@@ -4,7 +4,7 @@ from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -17,6 +17,7 @@ from app.schemas.manga import (
     MangaCreate,
     MangaDetail,
     MangaListItem,
+    MangaUpdate,
     PaginatedResponse,
 )
 from app.services.auth import get_current_user, get_optional_user
@@ -174,6 +175,31 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@router.get("/staff/{manga_id}", response_model=MangaDetail)
+async def staff_manga_detail(
+    manga_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_staff:
+        raise HTTPException(status_code=403, detail="Staff only")
+
+    stmt = (
+        select(Manga)
+        .options(
+            selectinload(Manga.manga_categories).selectinload(MangaCategory.category),
+            joinedload(Manga.first_chapter),
+            joinedload(Manga.latest_chapter),
+        )
+        .where(Manga.id == manga_id)
+    )
+    result = await db.execute(stmt)
+    manga = result.scalar_one_or_none()
+    if not manga:
+        raise HTTPException(status_code=404, detail="Manga not found")
+    return await _enrich_manga_detail(manga)
+
+
 # ── Manga Detail ──────────────────────────────────────────────────────────────
 
 
@@ -325,6 +351,83 @@ async def create_manga(
     await db.commit()
     await db.refresh(manga)
     return {"id": manga.id, "slug": manga.slug, "title": manga.title}
+
+
+@router.put("/{manga_id}")
+async def update_manga(
+    manga_id: int,
+    payload: MangaUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_staff:
+        raise HTTPException(status_code=403, detail="Staff only")
+
+    result = await db.execute(
+        select(Manga)
+        .options(
+            joinedload(Manga.first_chapter),
+            joinedload(Manga.latest_chapter),
+        )
+        .where(Manga.id == manga_id)
+    )
+    manga = result.scalar_one_or_none()
+    if not manga:
+        raise HTTPException(status_code=404, detail="Manga not found")
+
+    if payload.title is not None and payload.title != manga.title:
+        new_slug = make_slug(payload.title)
+        existing = await db.execute(
+            select(Manga).where(Manga.slug == new_slug, Manga.id != manga_id)
+        )
+        if existing.scalar_one_or_none():
+            new_slug = f"{new_slug}-{uuid.uuid4().hex[:6]}"
+        manga.title = payload.title
+        manga.slug = new_slug
+
+    for field in ("description", "author", "artist", "status", "anilist_id", "sources"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(manga, field, value)
+
+    if payload.category_ids is not None:
+        await db.execute(delete(MangaCategory).where(MangaCategory.manga_id == manga.id))
+        await db.flush()
+        for cat_id in payload.category_ids:
+            db.add(MangaCategory(manga_id=manga.id, category_id=cat_id))
+
+    await db.commit()
+
+    refreshed = await db.execute(
+        select(Manga)
+        .execution_options(populate_existing=True)
+        .options(
+            selectinload(Manga.manga_categories).selectinload(MangaCategory.category),
+            joinedload(Manga.first_chapter),
+            joinedload(Manga.latest_chapter),
+        )
+        .where(Manga.id == manga_id)
+    )
+    return await _enrich_manga_detail(refreshed.scalar_one())
+
+
+@router.delete("/{manga_id}")
+async def delete_manga(
+    manga_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_staff:
+        raise HTTPException(status_code=403, detail="Staff only")
+
+    result = await db.execute(select(Manga).where(Manga.id == manga_id))
+    manga = result.scalar_one_or_none()
+    if not manga:
+        raise HTTPException(status_code=404, detail="Manga not found")
+
+    await db.delete(manga)
+    await db.commit()
+    return {"detail": "Manga deleted"}
 
 
 @router.post("/{manga_id}/cover")

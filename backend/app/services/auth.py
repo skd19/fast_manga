@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.security.utils import get_authorization_scheme_param
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.user import User
@@ -33,7 +34,11 @@ async def get_current_user(
     if not username:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.staff_profile))
+        .where(User.username == username)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise credentials_exception
@@ -55,7 +60,11 @@ async def get_optional_user(
     username = payload.get("sub")
     if not username:
         return None
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.staff_profile))
+        .where(User.username == username)
+    )
     return result.scalar_one_or_none()
 
 

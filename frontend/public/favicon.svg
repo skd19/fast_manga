@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FastManga">
+  <rect width="64" height="64" rx="14" fill="#111827"/>
+  <path d="M16 14h22c5.5 0 10 4.5 10 10v26H24c-4.4 0-8-3.6-8-8V14Z" fill="#7c3aed"/>
+  <path d="M22 20h15c3 0 5.5 2.5 5.5 5.5V44H27c-2.8 0-5-2.2-5-5V20Z" fill="#f9fafb"/>
+  <path d="M28 27h10M28 34h9M28 41h6" stroke="#111827" stroke-width="3" stroke-linecap="round"/>
+  <path d="M43 18l-8 14h7l-5 14 12-18h-8l2-10Z" fill="#facc15"/>
+</svg>

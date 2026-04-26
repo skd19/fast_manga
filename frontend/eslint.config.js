@@ -21,7 +21,7 @@ export default [
       },
     },
     settings: {
-      react: { version: '18.3' },
+      react: { version: '19.2' },
     },
     plugins: {
       react,
@@ -38,6 +38,7 @@ export default [
         { allowConstantExport: true },
       ],
       'no-unused-vars': ['warn', { varsIgnorePattern: '^_', argsIgnorePattern: '^_' }],
+      'react-hooks/set-state-in-effect': 'off',
       'react/prop-types': 'off',
     },
   },

@@ -72,19 +72,20 @@ export default function HomePage() {
         <Section title="Continue Reading" icon={Clock} linkTo="/profile">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {historyData.slice(0, 6).map((h) => (
-              <div
+              <Link
                 key={h.id}
+                to={h.manga_slug ? `/manga/${h.manga_slug}` : "/profile"}
                 className="card p-3 hover:border-manga-700 transition-colors"
               >
-                <p className="text-xs text-gray-400 truncate">
-                  Manga #{h.manga_id}
+                <p className="text-sm font-medium text-gray-200 truncate hover:text-manga-300 transition-colors">
+                  {h.manga_title || `Manga #${h.manga_id}`}
                 </p>
                 <p className="text-xs text-manga-400 mt-1">
                   {h.last_read_chapter_id
                     ? `Ch. ${h.last_read_chapter_id}`
                     : "Not started"}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         </Section>
