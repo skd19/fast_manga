@@ -1,8 +1,9 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useChapter, useChapterNav } from "../hooks/useManga";
 import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 import { mangaApi } from "../api/manga";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import CommentSection from "../components/manga/CommentSection";
@@ -55,6 +56,9 @@ export default function ChapterReadPage() {
   const [readerMode, setReaderMode] = useState(
     () => localStorage.getItem("readerMode") || "webtoon",
   );
+  const [autoLoadNextChapter, setAutoLoadNextChapter] = useState(
+    () => localStorage.getItem("autoLoadNextChapter") === "true",
+  );
   const [mangaSpreadCount, setMangaSpreadCount] = useState(() => {
     const saved = Number(localStorage.getItem("mangaSpreadCount"));
     return saved === 1 || saved === 2 ? saved : 1;
@@ -64,6 +68,10 @@ export default function ChapterReadPage() {
   const [showControls, setShowControls] = useState(true);
   const [showReaderSettings, setShowReaderSettings] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [loadedChapterEntries, setLoadedChapterEntries] = useState([]);
+  const [loadingNextChapter, setLoadingNextChapter] = useState(false);
+  const autoNavigatingRef = useRef(false);
+  const autoLoadSentinelRef = useRef(null);
 
   // Mark as read when loaded
   useEffect(() => {
@@ -75,6 +83,13 @@ export default function ChapterReadPage() {
   useEffect(() => {
     localStorage.setItem("readerMode", readerMode);
   }, [readerMode]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "autoLoadNextChapter",
+      autoLoadNextChapter ? "true" : "false",
+    );
+  }, [autoLoadNextChapter]);
 
   useEffect(() => {
     localStorage.setItem("mangaSpreadCount", String(mangaSpreadCount));
@@ -109,6 +124,22 @@ export default function ChapterReadPage() {
     );
   }, [mangaPageStep, pages.length]);
 
+  const loadChapterBundle = useCallback(
+    async (slug) => {
+      const [chapterData, navData] = await Promise.all([
+        mangaApi.readChapter(mangaSlug, slug).then((response) => response.data),
+        mangaApi.chapterNav(mangaSlug, slug).then((response) => response.data),
+      ]);
+
+      if (user) {
+        mangaApi.markChapterRead(mangaSlug, slug).catch(() => {});
+      }
+
+      return { slug, chapter: chapterData, nav: navData };
+    },
+    [mangaSlug, user],
+  );
+
   useEffect(() => {
     setSpreadIndex(0);
     scrollTop();
@@ -120,6 +151,22 @@ export default function ChapterReadPage() {
       Math.min(current, Math.max(pages.length - mangaPageStep, 0)),
     );
   }, [mangaPageStep, pages.length]);
+
+  useEffect(() => {
+    if (!chapter || !nav) return;
+
+    if (autoNavigatingRef.current) {
+      autoNavigatingRef.current = false;
+      setLoadedChapterEntries((current) =>
+        current.map((entry) =>
+          entry.slug === chapterSlug ? { slug: chapterSlug, chapter, nav } : entry,
+        ),
+      );
+      return;
+    }
+
+    setLoadedChapterEntries([{ slug: chapterSlug, chapter, nav }]);
+  }, [chapter, nav, chapterSlug]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -142,6 +189,76 @@ export default function ChapterReadPage() {
       // Browser rejected fullscreen, usually because the page is embedded.
     }
   };
+
+  const handleAutoLoadNextChapter = useCallback(async () => {
+    if (
+      readerMode !== "webtoon" ||
+      !autoLoadNextChapter ||
+      loadingNextChapter ||
+      loadedChapterEntries.length === 0
+    ) {
+      return;
+    }
+
+    const currentEntry = loadedChapterEntries[loadedChapterEntries.length - 1];
+    const nextSlug = currentEntry.nav?.next?.slug;
+    if (!nextSlug || loadedChapterEntries.some((entry) => entry.slug === nextSlug)) {
+      return;
+    }
+
+    setLoadingNextChapter(true);
+    const toastId = toast.loading("Loading next chapter...");
+    try {
+      const [nextEntry] = await Promise.all([
+        loadChapterBundle(nextSlug),
+        new Promise((resolve) => window.setTimeout(resolve, 2000)),
+      ]);
+      setLoadedChapterEntries((current) => [...current, nextEntry]);
+      autoNavigatingRef.current = true;
+      navigate(`/manga/${mangaSlug}/chapter/${nextSlug}`, { replace: true });
+      toast.dismiss(toastId);
+    } catch (error) {
+      toast.error("Failed to load next chapter", { id: toastId });
+      throw error;
+    } finally {
+      setLoadingNextChapter(false);
+    }
+  }, [
+    autoLoadNextChapter,
+    loadChapterBundle,
+    loadedChapterEntries,
+    loadingNextChapter,
+    mangaSlug,
+    navigate,
+    readerMode,
+  ]);
+
+  useEffect(() => {
+    if (
+      readerMode !== "webtoon" ||
+      !autoLoadNextChapter ||
+      !autoLoadSentinelRef.current
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          handleAutoLoadNextChapter();
+        }
+      },
+      { rootMargin: "250px 0px" },
+    );
+
+    observer.observe(autoLoadSentinelRef.current);
+    return () => observer.disconnect();
+  }, [autoLoadNextChapter, handleAutoLoadNextChapter, readerMode]);
+
+  const activeEntry =
+    readerMode === "webtoon" && loadedChapterEntries.length > 0
+      ? loadedChapterEntries[loadedChapterEntries.length - 1]
+      : { chapter, nav };
 
   // Keyboard navigation
   useEffect(() => {
@@ -202,14 +319,16 @@ export default function ChapterReadPage() {
   return (
     <div className="min-h-screen bg-gray-950">
       <ReaderTopBar
-        chapter={chapter}
+        autoLoadNextChapter={autoLoadNextChapter}
+        chapter={activeEntry.chapter}
         chapterOptions={chapterOptions}
         chapterSlug={chapterSlug}
         imageWidth={imageWidth}
         isFullscreen={isFullscreen}
         mangaSlug={mangaSlug}
-        nav={nav}
+        nav={activeEntry.nav}
         navigate={navigate}
+        onAutoLoadNextChapterChange={setAutoLoadNextChapter}
         onChapterChange={scrollTop}
         onImageWidthChange={setImageWidth}
         onMangaSpreadCountChange={setMangaSpreadCount}
@@ -298,15 +417,49 @@ export default function ChapterReadPage() {
                 </div>
               </div>
             ) : (
-              pages.map((src, idx) => (
-                <LazyImage
-                  key={idx}
-                  src={src}
-                  alt={`Page ${idx + 1}`}
-                  rootMargin="400px 0px"
-                  aspectRatio="2/3"
-                />
-              ))
+              <>
+                {loadedChapterEntries.map((entry, chapterIndex) => (
+                  <div key={entry.slug}>
+                    {chapterIndex > 0 && (
+                      <div className="mx-auto max-w-3xl px-4 py-8 text-center">
+                        <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
+                          Next Chapter
+                        </p>
+                        <p className="text-sm text-gray-300">
+                          Chapter {Number(entry.chapter.number)}
+                          {entry.chapter.title
+                            ? ` — ${entry.chapter.title}`
+                            : ""}
+                        </p>
+                      </div>
+                    )}
+                    {entry.chapter.images_data.map((src, idx) => (
+                      <LazyImage
+                        key={`${entry.slug}-${idx}`}
+                        src={src}
+                        alt={`Page ${idx + 1}`}
+                        rootMargin="400px 0px"
+                        aspectRatio="2/3"
+                      />
+                    ))}
+                  </div>
+                ))}
+                {autoLoadNextChapter && (
+                  <div
+                    ref={autoLoadSentinelRef}
+                    className="py-8 text-center text-xs text-gray-600"
+                  >
+                    {loadingNextChapter ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <LoadingSpinner size="sm" />
+                        <span>Loading next chapter...</span>
+                      </div>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+                )}
+              </>
             )
           ) : (
             <div className="text-center py-32 text-gray-500">
@@ -320,9 +473,9 @@ export default function ChapterReadPage() {
       <div className="max-w-3xl mx-auto px-4 pb-32">
         {readerMode === "webtoon" && (
           <div className="mb-6 flex justify-center">
-            {nav?.next ? (
+            {activeEntry.nav?.next ? (
               <Link
-                to={`/manga/${mangaSlug}/chapter/${nav.next.slug}`}
+                to={`/manga/${mangaSlug}/chapter/${activeEntry.nav.next.slug}`}
                 className="btn-primary"
               >
                 Next Chapter <ChevronRight size={16} />
