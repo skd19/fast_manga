@@ -51,7 +51,7 @@ Thumbs.db
 *.log
 logs/
 *.sqlite3
-*.db
+# *.db
 
 # Testing & Coverage
 .coverage
@@ -69,7 +69,7 @@ dmypy.json
 .pytype/
 
 # Packaging
-dist/
+# dist/
 build/
 *.egg-info/
 *.whl
