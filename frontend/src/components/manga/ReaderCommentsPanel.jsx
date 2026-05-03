@@ -4,7 +4,6 @@ import CommentSection from "./CommentSection";
 
 export default function ReaderCommentsPanel({
   activeEntry,
-  commentsSectionRef,
   mangaSlug,
   chapterSlug,
   readerMode,
@@ -12,7 +11,7 @@ export default function ReaderCommentsPanel({
   onToggleComments,
 }) {
   return (
-    <div ref={commentsSectionRef} className="max-w-3xl mx-auto px-4 pb-32">
+    <div className="max-w-3xl mx-auto px-4 pb-32">
       {readerMode === "webtoon" && (
         <div className="mb-6 flex justify-center">
           {activeEntry.nav?.next ? (
