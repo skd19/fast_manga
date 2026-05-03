@@ -25,6 +25,8 @@ const READER_MODES = [
   { value: "side-by-side", label: "Manga" },
 ];
 
+const NEXT_CHAPTER_TOAST_ID = "reader-next-chapter";
+
 export default function ChapterReadPage() {
   const { mangaSlug, chapterSlug } = useParams();
   const { user } = useAuth();
@@ -85,6 +87,10 @@ export default function ChapterReadPage() {
   const autoLoadTimeoutRef = useRef(null);
   const autoLoadToastIdRef = useRef(null);
   const autoLoadRequestIdRef = useRef(0);
+  const readerModeRef = useRef(readerMode);
+  const autoLoadNextChapterRef = useRef(autoLoadNextChapter);
+  const loadingNextChapterRef = useRef(loadingNextChapter);
+  const loadedChapterEntriesRef = useRef(loadedChapterEntries);
 
   // Mark as read when loaded
   useEffect(() => {
@@ -98,6 +104,10 @@ export default function ChapterReadPage() {
   }, [readerMode]);
 
   useEffect(() => {
+    readerModeRef.current = readerMode;
+  }, [readerMode]);
+
+  useEffect(() => {
     localStorage.setItem(
       "autoLoadNextChapter",
       autoLoadNextChapter ? "true" : "false",
@@ -105,8 +115,20 @@ export default function ChapterReadPage() {
   }, [autoLoadNextChapter]);
 
   useEffect(() => {
+    autoLoadNextChapterRef.current = autoLoadNextChapter;
+  }, [autoLoadNextChapter]);
+
+  useEffect(() => {
     localStorage.setItem("mangaSpreadCount", String(mangaSpreadCount));
   }, [mangaSpreadCount]);
+
+  useEffect(() => {
+    loadingNextChapterRef.current = loadingNextChapter;
+  }, [loadingNextChapter]);
+
+  useEffect(() => {
+    loadedChapterEntriesRef.current = loadedChapterEntries;
+  }, [loadedChapterEntries]);
 
   const pages = Array.isArray(chapter?.images_data) ? chapter.images_data : [];
   const mangaPageStep = mangaSpreadCount;
@@ -247,29 +269,38 @@ export default function ChapterReadPage() {
       autoLoadToastIdRef.current = null;
     }
 
+    loadingNextChapterRef.current = false;
     setLoadingNextChapter(false);
   }, []);
 
   const startAutoLoadNextChapter = useCallback(() => {
     if (
-      readerMode !== "webtoon" ||
-      !autoLoadNextChapter ||
-      loadingNextChapter ||
-      loadedChapterEntries.length === 0
+      readerModeRef.current !== "webtoon" ||
+      !autoLoadNextChapterRef.current ||
+      loadingNextChapterRef.current ||
+      autoLoadTimeoutRef.current ||
+      loadedChapterEntriesRef.current.length === 0
     ) {
       return;
     }
 
-    const currentEntry = loadedChapterEntries[loadedChapterEntries.length - 1];
+    const currentEntry =
+      loadedChapterEntriesRef.current[loadedChapterEntriesRef.current.length - 1];
     const nextSlug = currentEntry.nav?.next?.slug;
-    if (!nextSlug || loadedChapterEntries.some((entry) => entry.slug === nextSlug)) {
+    if (
+      !nextSlug ||
+      loadedChapterEntriesRef.current.some((entry) => entry.slug === nextSlug)
+    ) {
       return;
     }
 
     const requestId = autoLoadRequestIdRef.current + 1;
     autoLoadRequestIdRef.current = requestId;
+    loadingNextChapterRef.current = true;
     setLoadingNextChapter(true);
-    autoLoadToastIdRef.current = toast.loading("Loading next chapter...");
+    autoLoadToastIdRef.current = toast.loading("Loading next chapter...", {
+      id: NEXT_CHAPTER_TOAST_ID,
+    });
 
     autoLoadTimeoutRef.current = window.setTimeout(async () => {
       autoLoadTimeoutRef.current = null;
@@ -289,29 +320,21 @@ export default function ChapterReadPage() {
           toast.dismiss(autoLoadToastIdRef.current);
           autoLoadToastIdRef.current = null;
         }
-      } catch (error) {
+      } catch {
         if (autoLoadRequestIdRef.current === requestId) {
           toast.error("Failed to load next chapter", {
-            id: autoLoadToastIdRef.current ?? undefined,
+            id: autoLoadToastIdRef.current ?? NEXT_CHAPTER_TOAST_ID,
           });
           autoLoadToastIdRef.current = null;
         }
-        throw error;
       } finally {
         if (autoLoadRequestIdRef.current === requestId) {
+          loadingNextChapterRef.current = false;
           setLoadingNextChapter(false);
         }
       }
     }, 4000);
-  }, [
-    autoLoadNextChapter,
-    loadChapterBundle,
-    loadedChapterEntries,
-    loadingNextChapter,
-    mangaSlug,
-    navigate,
-    readerMode,
-  ]);
+  }, [loadChapterBundle, mangaSlug, navigate]);
 
   useEffect(() => {
     if (
