@@ -188,7 +188,7 @@ export default function ReaderTopBar({
                         Auto Load Next
                       </p>
                       <p className="text-[11px] text-gray-500 mt-1">
-                        Append the next chapter when you reach the bottom.
+                        Append the next chapter when comments come into view.
                       </p>
                     </div>
                     <button

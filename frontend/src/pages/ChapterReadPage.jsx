@@ -71,7 +71,9 @@ export default function ChapterReadPage() {
   const [loadedChapterEntries, setLoadedChapterEntries] = useState([]);
   const [loadingNextChapter, setLoadingNextChapter] = useState(false);
   const autoNavigatingRef = useRef(false);
-  const autoLoadSentinelRef = useRef(null);
+  const pendingSnapChapterSlugRef = useRef(null);
+  const chapterSectionRefs = useRef({});
+  const commentsSectionRef = useRef(null);
 
   // Mark as read when loaded
   useEffect(() => {
@@ -94,8 +96,6 @@ export default function ChapterReadPage() {
   useEffect(() => {
     localStorage.setItem("mangaSpreadCount", String(mangaSpreadCount));
   }, [mangaSpreadCount]);
-
-  const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   const widthOptions = [
     { value: "max-w-xl", label: "Narrow" },
@@ -140,11 +140,37 @@ export default function ChapterReadPage() {
     [mangaSlug, user],
   );
 
+  const scrollTop = useCallback(
+    (behavior = "smooth") => {
+      if (readerMode === "webtoon") {
+        const activeSlug =
+          loadedChapterEntries.length > 0
+            ? loadedChapterEntries[loadedChapterEntries.length - 1].slug
+            : chapterSlug;
+        const activeChapterSection = chapterSectionRefs.current[activeSlug];
+
+        if (activeChapterSection) {
+          window.scrollTo({
+            top: Math.max(activeChapterSection.offsetTop - 64, 0),
+            behavior,
+          });
+          return;
+        }
+      }
+
+      window.scrollTo({ top: 0, behavior });
+    },
+    [chapterSlug, loadedChapterEntries, readerMode],
+  );
+
   useEffect(() => {
     setSpreadIndex(0);
-    scrollTop();
+    if (!autoNavigatingRef.current) {
+      scrollTop("auto");
+    }
     setShowReaderSettings(false);
-  }, [chapterSlug]);
+    setLoadingNextChapter(false);
+  }, [chapterSlug, scrollTop]);
 
   useEffect(() => {
     setSpreadIndex((current) =>
@@ -166,7 +192,24 @@ export default function ChapterReadPage() {
     }
 
     setLoadedChapterEntries([{ slug: chapterSlug, chapter, nav }]);
+    setLoadingNextChapter(false);
   }, [chapter, nav, chapterSlug]);
+
+  useEffect(() => {
+    const pendingSlug = pendingSnapChapterSlugRef.current;
+    if (!pendingSlug) return;
+
+    const targetSection = chapterSectionRefs.current[pendingSlug];
+    if (!targetSection) return;
+
+    pendingSnapChapterSlugRef.current = null;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: Math.max(targetSection.offsetTop - 64, 0),
+        behavior: "smooth",
+      });
+    });
+  }, [loadedChapterEntries]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -211,8 +254,9 @@ export default function ChapterReadPage() {
     try {
       const [nextEntry] = await Promise.all([
         loadChapterBundle(nextSlug),
-        new Promise((resolve) => window.setTimeout(resolve, 2000)),
+        new Promise((resolve) => window.setTimeout(resolve, 4000)),
       ]);
+      pendingSnapChapterSlugRef.current = nextSlug;
       setLoadedChapterEntries((current) => [...current, nextEntry]);
       autoNavigatingRef.current = true;
       navigate(`/manga/${mangaSlug}/chapter/${nextSlug}`, { replace: true });
@@ -237,7 +281,7 @@ export default function ChapterReadPage() {
     if (
       readerMode !== "webtoon" ||
       !autoLoadNextChapter ||
-      !autoLoadSentinelRef.current
+      !commentsSectionRef.current
     ) {
       return;
     }
@@ -251,7 +295,7 @@ export default function ChapterReadPage() {
       { rootMargin: "250px 0px" },
     );
 
-    observer.observe(autoLoadSentinelRef.current);
+    observer.observe(commentsSectionRef.current);
     return () => observer.disconnect();
   }, [autoLoadNextChapter, handleAutoLoadNextChapter, readerMode]);
 
@@ -419,7 +463,16 @@ export default function ChapterReadPage() {
             ) : (
               <>
                 {loadedChapterEntries.map((entry, chapterIndex) => (
-                  <div key={entry.slug}>
+                  <div
+                    key={entry.slug}
+                    ref={(node) => {
+                      if (node) {
+                        chapterSectionRefs.current[entry.slug] = node;
+                      } else {
+                        delete chapterSectionRefs.current[entry.slug];
+                      }
+                    }}
+                  >
                     {chapterIndex > 0 && (
                       <div className="mx-auto max-w-3xl px-4 py-8 text-center">
                         <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">
@@ -445,10 +498,7 @@ export default function ChapterReadPage() {
                   </div>
                 ))}
                 {autoLoadNextChapter && (
-                  <div
-                    ref={autoLoadSentinelRef}
-                    className="py-8 text-center text-xs text-gray-600"
-                  >
+                  <div className="py-8 text-center text-xs text-gray-600">
                     {loadingNextChapter ? (
                       <div className="flex flex-col items-center gap-3">
                         <LoadingSpinner size="sm" />
@@ -470,7 +520,7 @@ export default function ChapterReadPage() {
       </div>
 
       {/* ── Comment section (below images, outside click-toggle area) ──────── */}
-      <div className="max-w-3xl mx-auto px-4 pb-32">
+      <div ref={commentsSectionRef} className="max-w-3xl mx-auto px-4 pb-32">
         {readerMode === "webtoon" && (
           <div className="mb-6 flex justify-center">
             {activeEntry.nav?.next ? (
